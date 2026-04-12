@@ -36,17 +36,12 @@
             "description": "SCD Moodle – incognito browser for moodle.scd.edu.om"
           },
           "platforms": ["win32"]
-        },
-        {
-          "name": "@electron-forge/maker-dmg",
-          "platforms": ["darwin"]
         }
       ]
     }
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.4.0",
-    "@electron-forge/maker-dmg": "^7.4.0",
     "@electron-forge/maker-squirrel": "^7.4.0",
     "@electron-forge/maker-zip": "^7.4.0",
     "electron": "^27.0.0"
