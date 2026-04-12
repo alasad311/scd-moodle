@@ -15,7 +15,6 @@
         "name": "SCD Moodle",
         "executableName": "scd-moodle",
         "icon": "./assets/icon",
-        "electronDist": "./node_modules/electron/dist",
         "asar": true,
         "extraResource": [],
         "ignore": [
