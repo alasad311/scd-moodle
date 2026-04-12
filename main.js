@@ -1,4 +1,4 @@
-const { app, BaseWindow, WebContentsView, ipcMain, shell, Menu } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Menu } = require('electron');
 const path = require('path');
 
 const MOODLE_URL = 'https://moodle.scd.edu.om';
@@ -27,11 +27,10 @@ function layout() {
 app.whenReady().then(() => {
   const incognito = getIncognitoSession();
 
-  // Remove default menu (keeps things clean)
   Menu.setApplicationMenu(buildMenu());
 
   // ── Main window ───────────────────────────────────────────────────────────
-  mainWindow = new BaseWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 600,
@@ -39,10 +38,14 @@ app.whenReady().then(() => {
     title: 'SCD Moodle',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
   });
 
-  // ── Toolbar view ─────────────────────────────────────────────────────────
-  toolbarView = new WebContentsView({
+  // ── Toolbar BrowserView ───────────────────────────────────────────────────
+  toolbarView = new BrowserView({
     webPreferences: {
       preload: path.join(__dirname, 'src', 'preload.js'),
       contextIsolation: true,
@@ -50,11 +53,11 @@ app.whenReady().then(() => {
       nodeIntegration: false,
     },
   });
-  mainWindow.contentView.addChildView(toolbarView);
+  mainWindow.addBrowserView(toolbarView);
   toolbarView.webContents.loadFile(path.join(__dirname, 'src', 'toolbar.html'));
 
-  // ── Moodle view (incognito) ───────────────────────────────────────────────
-  moodleView = new WebContentsView({
+  // ── Moodle BrowserView (incognito) ────────────────────────────────────────
+  moodleView = new BrowserView({
     webPreferences: {
       session: incognito,
       contextIsolation: true,
@@ -62,8 +65,11 @@ app.whenReady().then(() => {
       nodeIntegration: false,
     },
   });
-  mainWindow.contentView.addChildView(moodleView);
+  mainWindow.addBrowserView(moodleView);
   moodleView.webContents.loadURL(MOODLE_URL);
+
+  // Initial layout
+  layout();
 
   // Route all new-window / target=_blank links back into moodleView
   moodleView.webContents.setWindowOpenHandler(({ url }) => {
@@ -71,7 +77,7 @@ app.whenReady().then(() => {
     return { action: 'deny' };
   });
 
-  // ── Loading state + can-go-back → toolbar ────────────────────────────────
+  // ── Loading state + can-go-back → toolbar ─────────────────────────────────
   function sendLoading(isLoading) {
     if (!toolbarView.webContents.isDestroyed()) {
       toolbarView.webContents.send('loading-state', isLoading);
@@ -107,7 +113,6 @@ app.whenReady().then(() => {
 
   // ── Layout on resize ──────────────────────────────────────────────────────
   mainWindow.on('resize', layout);
-  layout();
 
   // Show window once toolbar is ready (avoids white flash)
   toolbarView.webContents.once('dom-ready', () => {
