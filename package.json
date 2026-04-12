@@ -1,0 +1,56 @@
+{
+  "name": "scd-moodle",
+  "version": "1.0.0",
+  "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
+  "author": "SCD",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "build": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "name": "SCD Moodle",
+        "executableName": "scd-moodle",
+        "icon": "./assets/icon",
+        "electronDist": "./node_modules/electron/dist",
+        "asar": true,
+        "extraResource": [],
+        "ignore": [
+          "node_modules/electron$",
+          "\\.git",
+          "out"
+        ]
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": ["darwin", "win32"]
+        },
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "scd_moodle",
+            "authors": "SCD",
+            "description": "SCD Moodle – incognito browser for moodle.scd.edu.om"
+          },
+          "platforms": ["win32"]
+        },
+        {
+          "name": "@electron-forge/maker-dmg",
+          "platforms": ["darwin"]
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.4.0",
+    "@electron-forge/maker-dmg": "^7.4.0",
+    "@electron-forge/maker-squirrel": "^7.4.0",
+    "@electron-forge/maker-zip": "^7.4.0",
+    "electron": "^33.0.0"
+  },
+  "dependencies": {}
+}

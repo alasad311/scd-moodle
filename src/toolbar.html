@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      height: 44px;
+      background: #1a1a2e;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 10px;
+      /* allow dragging the window from the toolbar */
+      -webkit-app-region: drag;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    #back-btn,
+    #reload-btn {
+      -webkit-app-region: no-drag;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e0e0e0;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    #back-btn:hover,
+    #reload-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    #back-btn:active,
+    #reload-btn:active {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    /* Spinner shown during page load */
+    #spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #4f9cf9;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+      display: none;
+    }
+
+    #spinner.visible {
+      display: block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Title label */
+    #title {
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 13px;
+      letter-spacing: 0.3px;
+      flex: 1;
+      text-align: center;
+    }
+
+    /* Spacer to keep title centred when no right-side controls */
+    .spacer {
+      width: 32px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <button id="back-btn" title="Go Back">←</button>
+  <button id="reload-btn" title="Reload (F5)">↺</button>
+  <div id="spinner"></div>
+  <span id="title">SCD Moodle</span>
+  <div class="spacer"></div>
+
+  <script>
+    const backBtn   = document.getElementById('back-btn');
+    const reloadBtn = document.getElementById('reload-btn');
+    const spinner   = document.getElementById('spinner');
+
+    backBtn.addEventListener('click', () => {
+      window.electronAPI.goBack();
+    });
+
+    reloadBtn.addEventListener('click', () => {
+      window.electronAPI.refresh();
+    });
+
+    window.electronAPI.onLoadingState((isLoading) => {
+      spinner.classList.toggle('visible', isLoading);
+    });
+
+    window.electronAPI.onCanGoBack((canGoBack) => {
+      backBtn.disabled = !canGoBack;
+      backBtn.style.opacity = canGoBack ? '1' : '0.35';
+      backBtn.style.cursor  = canGoBack ? 'pointer' : 'default';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(mkdir -p \"C:/Users/Mahmoud AlAsad/Desktop/GitHub Repo/scd-moodle/assets\")",
+      "Bash(cp \"C:/Users/Mahmoud AlAsad/Desktop/GitHub Repo/campus.scd.edu.om/public/assets/images/logo/SCD icon tp.png\" \"C:/Users/Mahmoud AlAsad/Desktop/GitHub Repo/scd-moodle/assets/icon.png\")"
+    ]
+  }
+}
