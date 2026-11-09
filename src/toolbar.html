@@ -52,6 +52,17 @@
       background: rgba(255, 255, 255, 0.28);
     }
 
+    /* Dim with colour, NOT opacity: toggling opacity here crashes the GPU
+       process on some drivers (Chromium 118), which forces the whole app
+       into slow software rendering. */
+    #back-btn:disabled,
+    #back-btn:disabled:hover,
+    #back-btn:disabled:active {
+      color: rgba(224, 224, 224, 0.3);
+      background: rgba(255, 255, 255, 0.03);
+      cursor: default;
+    }
+
     /* Spinner shown during page load */
     #spinner {
       width: 18px;
@@ -114,8 +125,6 @@
 
     window.electronAPI.onCanGoBack((canGoBack) => {
       backBtn.disabled = !canGoBack;
-      backBtn.style.opacity = canGoBack ? '1' : '0.35';
-      backBtn.style.cursor  = canGoBack ? 'pointer' : 'default';
     });
   </script>
 </body>

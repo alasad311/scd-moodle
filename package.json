@@ -1,13 +1,18 @@
 {
   "name": "scd-moodle",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
   "author": "SCD",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alasad311/scd-moodle.git"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
     "build": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "publish": "electron-forge publish"
   },
   "config": {
     "forge": {
@@ -19,14 +24,19 @@
         "extraResource": [],
         "ignore": [
           "node_modules/electron$",
-          "\\.git",
-          "out"
+          "^/\\.git",
+          "^/\\.github",
+          "^/\\.claude",
+          "^/out"
         ]
       },
       "makers": [
         {
           "name": "@electron-forge/maker-zip",
-          "platforms": ["darwin", "win32"]
+          "platforms": [
+            "darwin",
+            "win32"
+          ]
         },
         {
           "name": "@electron-forge/maker-squirrel",
@@ -35,7 +45,22 @@
             "authors": "SCD",
             "description": "SCD Moodle – incognito browser for moodle.scd.edu.om"
           },
-          "platforms": ["win32"]
+          "platforms": [
+            "win32"
+          ]
+        }
+      ],
+      "publishers": [
+        {
+          "name": "@electron-forge/publisher-github",
+          "config": {
+            "repository": {
+              "owner": "alasad311",
+              "name": "scd-moodle"
+            },
+            "draft": true,
+            "prerelease": false
+          }
         }
       ]
     }
@@ -44,7 +69,11 @@
     "@electron-forge/cli": "^7.4.0",
     "@electron-forge/maker-squirrel": "^7.4.0",
     "@electron-forge/maker-zip": "^7.4.0",
+    "@electron-forge/publisher-github": "^7.11.1",
     "electron": "^27.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "update-electron-app": "^3.3.0"
+  }
 }

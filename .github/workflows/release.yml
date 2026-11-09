@@ -1,0 +1,26 @@
+name: Release
+
+# Push a version tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`) to build
+# the Windows installer and upload it to a draft GitHub Release. Publishing that
+# draft makes the update available to every installed copy of the app.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

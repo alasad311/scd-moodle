@@ -1,8 +1,45 @@
-const { app, BrowserWindow, BrowserView, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+// Squirrel.Windows runs the app with --squirrel-* flags during install/update/
+// uninstall (to create/remove shortcuts). Quit immediately in that case.
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+// ── GPU crash fallback ────────────────────────────────────────────────────────
+// On some Windows GPU drivers Chromium 118's D3D11 backend crashes the GPU
+// process as soon as a page uses CSS opacity. After 3 crashes Chromium drops
+// to software rendering and Moodle becomes very slow. If we see a GPU crash,
+// remember it and relaunch once using the OpenGL backend, which works there.
+const GPU_FALLBACK_FLAG = path.join(app.getPath('userData'), 'gpu-fallback-gl');
+const usingGpuFallback = fs.existsSync(GPU_FALLBACK_FLAG);
+if (usingGpuFallback) {
+  app.commandLine.appendSwitch('use-angle', 'gl');
+}
+app.on('child-process-gone', (_event, details) => {
+  if (details.type !== 'GPU' || usingGpuFallback) return;
+  if (details.reason === 'clean-exit' || details.reason === 'killed') return;
+  try {
+    fs.mkdirSync(path.dirname(GPU_FALLBACK_FLAG), { recursive: true });
+    fs.writeFileSync(GPU_FALLBACK_FLAG, `${details.reason} ${details.exitCode}\n`);
+    app.relaunch();
+    app.exit(0);
+  } catch (_) {
+    // best-effort; Chromium will still fall back to software rendering
+  }
+});
+
+// Only one instance: a second launch focuses the existing window instead of
+// starting another full Chromium process tree.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
 
 const MOODLE_URL = 'https://moodle.scd.edu.om';
 const TOOLBAR_HEIGHT = 44;
+const SEB_SCHEMES = ['seb:', 'sebs:'];
 
 let mainWindow = null;
 let toolbarView = null;
@@ -11,7 +48,49 @@ let moodleView = null;
 // ── Session partition (non-persistent = incognito) ────────────────────────────
 function getIncognitoSession() {
   const { session } = require('electron');
-  return session.fromPartition('incognito', { cache: false });
+  // A partition without the "persist:" prefix lives in memory only, so it is
+  // already incognito. Do NOT pass { cache: false }: that disables the HTTP
+  // cache entirely and forces every Moodle page to re-download all its JS/CSS.
+  return session.fromPartition('incognito');
+}
+
+// ── Safe Exam Browser hand-off ────────────────────────────────────────────────
+function isSebUrl(url) {
+  try {
+    return SEB_SCHEMES.includes(new URL(url).protocol);
+  } catch (_) {
+    return false;
+  }
+}
+
+function launchSeb(url) {
+  shell.openExternal(url).catch(() => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'Safe Exam Browser',
+      message: 'Safe Exam Browser could not be opened.',
+      detail: 'Please make sure Safe Exam Browser is installed on this computer, then try again.',
+    });
+  });
+}
+
+// ── Auto-update from GitHub Releases ──────────────────────────────────────────
+function setupAutoUpdate() {
+  // Only the installed (Squirrel) build can update itself; skip in dev.
+  if (!app.isPackaged || process.platform !== 'win32') return;
+  try {
+    const { updateElectronApp, UpdateSourceType } = require('update-electron-app');
+    updateElectronApp({
+      updateSource: {
+        type: UpdateSourceType.ElectronPublicUpdateService,
+        repo: 'alasad311/scd-moodle',
+      },
+      updateInterval: '1 hour',
+      notifyUser: true,
+    });
+  } catch (err) {
+    console.error('Auto-update setup failed:', err);
+  }
 }
 
 // ── Layout helper ─────────────────────────────────────────────────────────────
@@ -24,7 +103,15 @@ function layout() {
 }
 
 // ── App ready ─────────────────────────────────────────────────────────────────
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
 app.whenReady().then(() => {
+  setupAutoUpdate();
   const incognito = getIncognitoSession();
 
   Menu.setApplicationMenu(buildMenu());
@@ -72,10 +159,30 @@ app.whenReady().then(() => {
   layout();
 
   // Route all new-window / target=_blank links back into moodleView
+  // (SEB links are handed to the installed Safe Exam Browser instead.)
   moodleView.webContents.setWindowOpenHandler(({ url }) => {
-    moodleView.webContents.loadURL(url);
+    if (isSebUrl(url)) {
+      launchSeb(url);
+    } else {
+      moodleView.webContents.loadURL(url);
+    }
     return { action: 'deny' };
   });
+
+  // Moodle's "Launch Safe Exam Browser" button navigates to seb:// / sebs://.
+  // Chromium can't load those schemes (ERR_UNKNOWN_URL_SCHEME), so intercept
+  // the navigation in the page and any sub-frame and hand it off to SEB.
+  const interceptSeb = (event, url) => {
+    if (isSebUrl(url)) {
+      event.preventDefault();
+      launchSeb(url);
+    }
+  };
+  moodleView.webContents.on('will-navigate', interceptSeb);
+  moodleView.webContents.on('will-frame-navigate', (event) => {
+    if (!event.isMainFrame) interceptSeb(event, event.url); // main frame handled by will-navigate
+  });
+  moodleView.webContents.on('will-redirect', interceptSeb);
 
   // ── Loading state + can-go-back → toolbar ─────────────────────────────────
   function sendLoading(isLoading) {
