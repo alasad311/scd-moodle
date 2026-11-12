@@ -123,7 +123,7 @@ app.whenReady().then(() => {
     minWidth: 600,
     minHeight: 400,
     title: 'SCD Moodle',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false,
     webPreferences: {
       nodeIntegration: false,

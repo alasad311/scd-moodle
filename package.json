@@ -1,6 +1,6 @@
 {
   "name": "scd-moodle",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
   "author": "SCD",
   "repository": {
@@ -43,7 +43,9 @@
           "config": {
             "name": "scd_moodle",
             "authors": "SCD",
-            "description": "SCD Moodle – incognito browser for moodle.scd.edu.om"
+            "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
+            "setupIcon": "./assets/icon.ico",
+            "iconUrl": "https://raw.githubusercontent.com/alasad311/scd-moodle/main/assets/icon.ico"
           },
           "platforms": [
             "win32"
@@ -53,7 +55,8 @@
           "name": "@electron-forge/maker-dmg",
           "config": {
             "name": "SCD Moodle",
-            "format": "ULFO"
+            "format": "ULFO",
+            "icon": "./assets/icon.icns"
           },
           "platforms": [
             "darwin"

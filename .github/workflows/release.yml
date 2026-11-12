@@ -38,16 +38,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Build icon.icns from icon.png
-        run: |
-          mkdir -p build/icon.iconset
-          # Pad to a square canvas, then render every size macOS expects.
-          sips -p 1607 1607 assets/icon.png --out build/square.png
-          for s in 16 32 128 256 512; do
-            sips -z $s $s build/square.png --out build/icon.iconset/icon_${s}x${s}.png
-            sips -z $((s*2)) $((s*2)) build/square.png --out build/icon.iconset/icon_${s}x${s}@2x.png
-          done
-          iconutil -c icns build/icon.iconset -o assets/icon.icns
       # Universal = one app that runs natively on Apple Silicon and Intel Macs.
       - run: npm run publish -- --platform=darwin --arch=universal
         env:
