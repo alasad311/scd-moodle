@@ -1,8 +1,10 @@
 name: Release
 
-# Push a version tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`) to build
-# the Windows installer and upload it to a draft GitHub Release. Publishing that
-# draft makes the update available to every installed copy of the app.
+# Push a version tag (e.g. `git tag v1.1.1 && git push origin v1.1.1`) to build
+# the Windows installer and the macOS DMG/zip and upload them to a draft GitHub
+# Release. Publishing that draft makes the Windows update available to every
+# installed copy of the app. (The macOS build is unsigned, so it cannot
+# auto-update; Mac users download the new DMG manually.)
 on:
   push:
     tags:
@@ -22,5 +24,31 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-macos:
+    # Runs after Windows so both upload into the same draft release.
+    needs: publish-windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build icon.icns from icon.png
+        run: |
+          mkdir -p build/icon.iconset
+          # Pad to a square canvas, then render every size macOS expects.
+          sips -p 1607 1607 assets/icon.png --out build/square.png
+          for s in 16 32 128 256 512; do
+            sips -z $s $s build/square.png --out build/icon.iconset/icon_${s}x${s}.png
+            sips -z $((s*2)) $((s*2)) build/square.png --out build/icon.iconset/icon_${s}x${s}@2x.png
+          done
+          iconutil -c icns build/icon.iconset -o assets/icon.icns
+      # Universal = one app that runs natively on Apple Silicon and Intel Macs.
+      - run: npm run publish -- --platform=darwin --arch=universal
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

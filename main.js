@@ -244,8 +244,10 @@ app.whenReady().then(() => {
   });
 });
 
+// Quit on every platform (including macOS) when the window closes, so the
+// incognito session is always wiped and the next launch starts fresh.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });
 
 // ── Application menu (F5 / Cmd+R reload) ─────────────────────────────────────
@@ -253,6 +255,8 @@ function buildMenu() {
   const isMac = process.platform === 'darwin';
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
+    // macOS needs an Edit menu for Cmd+C / Cmd+V / Cmd+A to work in pages.
+    ...(isMac ? [{ role: 'editMenu' }] : []),
     {
       label: 'View',
       submenu: [
