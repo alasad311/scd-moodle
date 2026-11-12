@@ -17,6 +17,31 @@
 // The release workflow sets SQUIRREL_REMOTE_RELEASES to the previous
 // release's download folder so Squirrel can compute the delta against it.
 
+// Feeds
+// ─────
+// From 1.1.6 the app reads updates straight from the latest GitHub release
+// (https://github.com/<repo>/releases/latest/download/RELEASES), where the
+// relative package names in RELEASES resolve to the release's own files.
+// Copies on 1.1.5 or older still ask update.electronjs.org, which turns only
+// the FIRST package name in RELEASES into a download link; every other line
+// points nowhere. So reorderReleases() below puts this version's full package
+// first: those older copies try the delta, fail instantly, and fall back to
+// the full package (as Squirrel always does), while 1.1.6+ gets the delta.
+
+const fs = require('fs');
+const path = require('path');
+
+function reorderReleases(releasesPath, version) {
+  const text = fs.readFileSync(releasesPath, 'utf8').replace(/\uFEFF/g, '');
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  const fullName = `-${version}-full.nupkg`;
+  const first = lines.filter((l) => l.includes(fullName));
+  if (first.length !== 1) throw new Error(`RELEASES: expected one ${fullName} line, got ${first.length}`);
+  const ordered = [...first, ...lines.filter((l) => !l.includes(fullName))];
+  fs.writeFileSync(releasesPath, ordered.join('\r\n'));
+  return ordered;
+}
+
 const isWindowsBuild = process.platform === 'win32';
 
 // Never change this: it must stay constant for deltas to stay small.
@@ -79,6 +104,19 @@ module.exports = {
       },
     },
   ],
+  hooks: {
+    postMake: async (_config, makeResults) => {
+      for (const result of makeResults) {
+        for (const artifact of result.artifacts) {
+          if (path.basename(artifact) === 'RELEASES') {
+            const lines = reorderReleases(artifact, result.packageJSON.version);
+            console.log(`RELEASES (${lines.length} entries), first: ${lines[0]}`);
+          }
+        }
+      }
+      return makeResults;
+    },
+  },
   publishers: [
     {
       name: '@electron-forge/publisher-github',

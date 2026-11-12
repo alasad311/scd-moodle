@@ -75,10 +75,13 @@ function launchSeb(url) {
 }
 
 // ── Updates from GitHub Releases ──────────────────────────────────────────────
-// Windows: Squirrel downloads the new version in the background (via
-//   update.electronjs.org) and we show "Restart to update" in the toolbar.
-//   Squirrel reports no download percentage, so the toolbar shows an
-//   indeterminate "Downloading update…" indicator instead of a progress bar.
+// Windows: Squirrel downloads the new version in the background straight from
+//   the latest GitHub release and we show "Restart to update" in the toolbar.
+//   Squirrel reports no download percentage, so src/update-progress.js works
+//   it out by watching the package file grow (see there).
+//   (Up to 1.1.5 the feed was update.electronjs.org, which only rewrites the
+//   first package in RELEASES into a GitHub link and so cannot serve delta
+//   updates. Copies still on 1.1.5 or older keep using it; see forge.config.js.)
 // macOS: the build is unsigned and cannot self-update, so we only check the
 //   latest GitHub release and offer a link to download it.
 const REPO = 'alasad311/scd-moodle';
@@ -120,7 +123,12 @@ function setupUpdates() {
 
   if (process.platform === 'win32') {
     const { autoUpdater } = require('electron');
-    const feed = `https://update.electronjs.org/${REPO}/${process.platform}-${process.arch}/${app.getVersion()}`;
+    const { net } = require('electron');
+    const { watchUpdateDownload } = require('./src/update-progress');
+    const feed = `https://github.com/${REPO}/releases/latest/download`;
+    const packagesDir = path.resolve(path.dirname(process.execPath), '..', 'packages');
+    let stopProgress = null;
+    const endProgress = () => { if (stopProgress) { stopProgress(); stopProgress = null; } };
     try {
       autoUpdater.setFeedURL({ url: feed });
     } catch (err) {
@@ -130,12 +138,26 @@ function setupUpdates() {
     autoUpdater.on('checking-for-update', () => {
       if (updateState.state !== 'ready') setUpdateState({ state: 'checking' });
     });
-    autoUpdater.on('update-available', () => setUpdateState({ state: 'downloading' }));
+    autoUpdater.on('update-available', () => {
+      setUpdateState({ state: 'downloading' });
+      endProgress();
+      stopProgress = watchUpdateDownload({
+        feedUrl: feed,
+        currentVersion: app.getVersion(),
+        packagesDir,
+        fetchFn: (url) => net.fetch(url),
+        onProgress: (p) => {
+          if (updateState.state === 'downloading') setUpdateState({ state: 'downloading', ...p });
+        },
+      });
+    });
     autoUpdater.on('update-not-available', () => setUpdateState({ state: 'none', checkedAt: Date.now() }));
     autoUpdater.on('update-downloaded', (_e, _notes, releaseName) => {
+      endProgress();
       setUpdateState({ state: 'ready', version: String(releaseName || '').replace(/^v/, '') });
     });
     autoUpdater.on('error', (err) => {
+      endProgress();
       if (updateState.state !== 'ready') setUpdateState({ state: 'error', message: err && err.message });
     });
     checkForUpdates = () => {
@@ -188,10 +210,18 @@ function installUpdate() {
   }
 }
 
+function formatMB(bytes) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
 function updateStatusText() {
   switch (updateState.state) {
     case 'checking': return 'Checking for updates…';
-    case 'downloading': return 'Downloading an update…';
+    case 'downloading':
+      return typeof updateState.percent === 'number'
+        ? `Downloading an update… ${updateState.percent}% ` +
+          `(${formatMB(updateState.receivedBytes)} of ${formatMB(updateState.totalBytes)} MB)`
+        : 'Downloading an update…';
     case 'ready': return `Version ${updateState.version || 'update'} is ready. Restart to install.`;
     case 'available': return `Version ${updateState.version} is available to download.`;
     case 'none': return 'You have the latest version.';

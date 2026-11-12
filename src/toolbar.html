@@ -147,6 +147,20 @@
       border-radius: 50%;
       animation: spin 0.9s linear infinite;
     }
+    /* Download progress: a thin bar along the bottom of the pill */
+    #update { position: relative; overflow: hidden; }
+    #update .bar {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 3px;
+      background: #4f9cf9;
+      transition: width 0.4s ease;
+    }
+    #update .pct {
+      font-variant-numeric: tabular-nums;
+      color: #ffffff;
+    }
     #update .dot {
       width: 7px;
       height: 7px;
@@ -205,6 +219,15 @@
         const s = document.createElement('span'); s.className = 'mini-spin';
         updateEl.append(s, 'Downloading update…');
         updateEl.title = 'A new version is downloading in the background. You can keep working.';
+        if (typeof u.percent === 'number') {
+          const pct = document.createElement('span'); pct.className = 'pct';
+          pct.textContent = `${u.percent}%`;
+          const bar = document.createElement('span'); bar.className = 'bar';
+          bar.style.width = `${u.percent}%`;
+          updateEl.append(pct, bar);
+          const mb = (b) => (b / 1048576).toFixed(1);
+          updateEl.title += `\n${mb(u.receivedBytes)} of ${mb(u.totalBytes)} MB`;
+        }
         updateEl.classList.add('visible');
       } else if (u.state === 'ready') {
         const d = document.createElement('span'); d.className = 'dot';
