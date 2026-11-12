@@ -278,7 +278,7 @@ app.whenReady().then(() => {
     height: 800,
     minWidth: 600,
     minHeight: 400,
-    title: 'SCD Moodle',
+    title: `SCD Moodle — v${app.getVersion()}`,
     icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false,
     webPreferences: {
@@ -446,6 +446,8 @@ function buildMenu() {
     {
       label: 'Help',
       submenu: [
+        { label: `SCD Moodle  v${app.getVersion()}`, enabled: false },
+        { type: 'separator' },
         { label: 'Check for Updates…', click: manualCheckForUpdates },
         { type: 'separator' },
         { label: 'About SCD Moodle', click: showAbout },
