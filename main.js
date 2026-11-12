@@ -74,23 +74,179 @@ function launchSeb(url) {
   });
 }
 
-// ── Auto-update from GitHub Releases ──────────────────────────────────────────
-function setupAutoUpdate() {
-  // Only the installed (Squirrel) build can update itself; skip in dev.
-  if (!app.isPackaged || process.platform !== 'win32') return;
-  try {
-    const { updateElectronApp, UpdateSourceType } = require('update-electron-app');
-    updateElectronApp({
-      updateSource: {
-        type: UpdateSourceType.ElectronPublicUpdateService,
-        repo: 'alasad311/scd-moodle',
-      },
-      updateInterval: '1 hour',
-      notifyUser: true,
-    });
-  } catch (err) {
-    console.error('Auto-update setup failed:', err);
+// ── Updates from GitHub Releases ──────────────────────────────────────────────
+// Windows: Squirrel downloads the new version in the background (via
+//   update.electronjs.org) and we show "Restart to update" in the toolbar.
+//   Squirrel reports no download percentage, so the toolbar shows an
+//   indeterminate "Downloading update…" indicator instead of a progress bar.
+// macOS: the build is unsigned and cannot self-update, so we only check the
+//   latest GitHub release and offer a link to download it.
+const REPO = 'alasad311/scd-moodle';
+const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
+const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // Windows: hourly
+const MAC_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // macOS: GitHub API is rate-limited
+
+// state: idle | checking | downloading | ready | available | none | error | unsupported
+let updateState = { state: 'idle' };
+let manualCheckPending = false;
+
+function setUpdateState(next) {
+  updateState = next;
+  if (toolbarView && !toolbarView.webContents.isDestroyed()) {
+    toolbarView.webContents.send('update-state', updateState);
   }
+  if (manualCheckPending && ['none', 'error', 'ready', 'available', 'downloading'].includes(next.state)) {
+    manualCheckPending = false;
+    showManualCheckResult();
+  }
+}
+
+function compareVersions(a, b) {
+  const pa = String(a).replace(/^v/, '').split('.').map(Number);
+  const pb = String(b).replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+let checkForUpdates = () => {};
+
+function setupUpdates() {
+  if (!app.isPackaged) {
+    updateState = { state: 'unsupported', reason: 'Development build' };
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    const { autoUpdater } = require('electron');
+    const feed = `https://update.electronjs.org/${REPO}/${process.platform}-${process.arch}/${app.getVersion()}`;
+    try {
+      autoUpdater.setFeedURL({ url: feed });
+    } catch (err) {
+      updateState = { state: 'error', message: err.message };
+      return;
+    }
+    autoUpdater.on('checking-for-update', () => {
+      if (updateState.state !== 'ready') setUpdateState({ state: 'checking' });
+    });
+    autoUpdater.on('update-available', () => setUpdateState({ state: 'downloading' }));
+    autoUpdater.on('update-not-available', () => setUpdateState({ state: 'none', checkedAt: Date.now() }));
+    autoUpdater.on('update-downloaded', (_e, _notes, releaseName) => {
+      setUpdateState({ state: 'ready', version: String(releaseName || '').replace(/^v/, '') });
+    });
+    autoUpdater.on('error', (err) => {
+      if (updateState.state !== 'ready') setUpdateState({ state: 'error', message: err && err.message });
+    });
+    checkForUpdates = () => {
+      if (updateState.state === 'ready' || updateState.state === 'downloading') {
+        setUpdateState(updateState);
+        return;
+      }
+      autoUpdater.checkForUpdates();
+    };
+    // Squirrel holds a lock on first run after install; give it time.
+    const firstRun = process.argv.includes('--squirrel-firstrun');
+    setTimeout(checkForUpdates, firstRun ? 60 * 1000 : 10 * 1000);
+    setInterval(checkForUpdates, UPDATE_INTERVAL_MS);
+    return;
+  }
+
+  if (process.platform === 'darwin') {
+    const { net } = require('electron');
+    checkForUpdates = async () => {
+      setUpdateState({ state: 'checking' });
+      try {
+        const res = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!res.ok) throw new Error(`GitHub returned ${res.status}`);
+        const rel = await res.json();
+        const latest = String(rel.tag_name || '').replace(/^v/, '');
+        if (latest && compareVersions(latest, app.getVersion()) > 0) {
+          setUpdateState({ state: 'available', version: latest, url: rel.html_url || RELEASES_PAGE });
+        } else {
+          setUpdateState({ state: 'none', checkedAt: Date.now() });
+        }
+      } catch (err) {
+        setUpdateState({ state: 'error', message: err.message });
+      }
+    };
+    setTimeout(checkForUpdates, 10 * 1000);
+    setInterval(checkForUpdates, MAC_CHECK_INTERVAL_MS);
+    return;
+  }
+
+  updateState = { state: 'unsupported', reason: 'Not supported on this platform' };
+}
+
+function installUpdate() {
+  if (updateState.state === 'ready') {
+    require('electron').autoUpdater.quitAndInstall();
+  } else if (updateState.state === 'available') {
+    shell.openExternal(updateState.url || RELEASES_PAGE);
+  }
+}
+
+function updateStatusText() {
+  switch (updateState.state) {
+    case 'checking': return 'Checking for updates…';
+    case 'downloading': return 'Downloading an update…';
+    case 'ready': return `Version ${updateState.version || 'update'} is ready. Restart to install.`;
+    case 'available': return `Version ${updateState.version} is available to download.`;
+    case 'none': return 'You have the latest version.';
+    case 'error': return 'Could not check for updates. Please check your internet connection.';
+    case 'unsupported': return `Automatic updates are off (${updateState.reason}).`;
+    default: return 'Update check pending.';
+  }
+}
+
+function showManualCheckResult() {
+  if (updateState.state === 'ready' || updateState.state === 'available') {
+    const isReady = updateState.state === 'ready';
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update available',
+      message: updateStatusText(),
+      buttons: [isReady ? 'Restart now' : 'Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    }).then(({ response }) => { if (response === 0) installUpdate(); });
+  } else {
+    dialog.showMessageBox(mainWindow, {
+      type: updateState.state === 'error' ? 'warning' : 'info',
+      title: 'Check for Updates',
+      message: updateStatusText(),
+      detail: updateState.state === 'error' && updateState.message ? updateState.message : undefined,
+    });
+  }
+}
+
+function manualCheckForUpdates() {
+  if (updateState.state === 'unsupported') {
+    showManualCheckResult();
+    return;
+  }
+  manualCheckPending = true;
+  checkForUpdates();
+}
+
+function showAbout() {
+  const { nativeImage } = require('electron');
+  dialog.showMessageBox(mainWindow, {
+    type: 'none',
+    icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 64, height: 64 }),
+    title: 'About SCD Moodle',
+    message: `SCD Moodle  v${app.getVersion()}`,
+    detail:
+      `${updateStatusText()}\n\n` +
+      `Electron ${process.versions.electron} · Chromium ${process.versions.chrome}\n` +
+      `${usingGpuFallback ? 'Graphics: OpenGL compatibility mode\n' : ''}` +
+      `github.com/${REPO}`,
+    buttons: ['OK', 'Check for Updates'],
+    defaultId: 0,
+    cancelId: 0,
+  }).then(({ response }) => { if (response === 1) manualCheckForUpdates(); });
 }
 
 // ── Layout helper ─────────────────────────────────────────────────────────────
@@ -111,7 +267,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(() => {
-  setupAutoUpdate();
+  setupUpdates();
   const incognito = getIncognitoSession();
 
   Menu.setApplicationMenu(buildMenu());
@@ -218,6 +374,10 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('app:get-info', () => ({ version: app.getVersion(), update: updateState }));
+  ipcMain.on('app:show-about', showAbout);
+  ipcMain.on('update:install', installUpdate);
+
   // ── Layout on resize ──────────────────────────────────────────────────────
   mainWindow.on('resize', layout);
 
@@ -283,6 +443,14 @@ function buildMenu() {
       ],
     },
     { role: 'windowMenu' },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'Check for Updates…', click: manualCheckForUpdates },
+        { type: 'separator' },
+        { label: 'About SCD Moodle', click: showAbout },
+      ],
+    },
   ];
   return Menu.buildFromTemplate(template);
 }

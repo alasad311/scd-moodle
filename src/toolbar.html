@@ -83,28 +83,89 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Left / right groups share the free space equally so the title stays centred */
+    .group {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .group.right { justify-content: flex-end; }
+
     /* Title label */
     #title {
       color: rgba(255, 255, 255, 0.55);
       font-size: 13px;
       letter-spacing: 0.3px;
-      flex: 1;
-      text-align: center;
+      white-space: nowrap;
     }
 
-    /* Spacer to keep title centred when no right-side controls */
-    .spacer {
-      width: 32px;
-      flex-shrink: 0;
+    /* Version label (opens About) */
+    #version-btn {
+      -webkit-app-region: no-drag;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.45);
+      font: inherit;
+      font-size: 12px;
+      padding: 4px 6px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #version-btn:hover { background: rgba(255, 255, 255, 0.10); color: #e0e0e0; }
+
+    /* Update indicator. NOTE: no `opacity` anywhere in this file (GPU crash bug). */
+    #update {
+      -webkit-app-region: no-drag;
+      display: none;
+      align-items: center;
+      gap: 7px;
+      height: 28px;
+      padding: 0 11px;
+      border: none;
+      border-radius: 14px;
+      font: inherit;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(79, 156, 249, 0.16);
+      color: #9cc6ff;
+      cursor: default;
+    }
+    #update.visible { display: flex; }
+    #update.action {
+      background: #2e9d5b;
+      color: #ffffff;
+      cursor: pointer;
+    }
+    #update.action:hover { background: #36b46a; }
+    #update .mini-spin {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(156, 198, 255, 0.3);
+      border-top-color: #9cc6ff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    #update .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ffffff;
     }
   </style>
 </head>
 <body>
-  <button id="back-btn" title="Go Back">←</button>
-  <button id="reload-btn" title="Reload (F5)">↺</button>
-  <div id="spinner"></div>
+  <div class="group left">
+    <button id="back-btn" title="Go Back">←</button>
+    <button id="reload-btn" title="Reload (F5)">↺</button>
+    <div id="spinner"></div>
+  </div>
   <span id="title">SCD Moodle</span>
-  <div class="spacer"></div>
+  <div class="group right">
+    <button id="update" type="button"></button>
+    <button id="version-btn" type="button" title="About SCD Moodle"></button>
+  </div>
 
   <script>
     const backBtn   = document.getElementById('back-btn');
@@ -126,6 +187,43 @@
     window.electronAPI.onCanGoBack((canGoBack) => {
       backBtn.disabled = !canGoBack;
     });
+
+    // ── Version + update indicator ───────────────────────────────────────
+    const versionBtn = document.getElementById('version-btn');
+    const updateEl   = document.getElementById('update');
+    versionBtn.addEventListener('click', () => window.electronAPI.showAbout());
+    updateEl.addEventListener('click', () => {
+      if (updateEl.classList.contains('action')) window.electronAPI.installUpdate();
+    });
+
+    function renderUpdate(u) {
+      updateEl.className = '';
+      updateEl.textContent = '';
+      updateEl.removeAttribute('title');
+      if (!u) return;
+      if (u.state === 'downloading') {
+        const s = document.createElement('span'); s.className = 'mini-spin';
+        updateEl.append(s, 'Downloading update…');
+        updateEl.title = 'A new version is downloading in the background. You can keep working.';
+        updateEl.classList.add('visible');
+      } else if (u.state === 'ready') {
+        const d = document.createElement('span'); d.className = 'dot';
+        updateEl.append(d, u.version ? `Restart to update (v${u.version})` : 'Restart to update');
+        updateEl.title = 'The update is downloaded. Click to restart and install it.';
+        updateEl.classList.add('visible', 'action');
+      } else if (u.state === 'available') {
+        const d = document.createElement('span'); d.className = 'dot';
+        updateEl.append(d, `Update available (v${u.version})`);
+        updateEl.title = 'Click to download the new version.';
+        updateEl.classList.add('visible', 'action');
+      }
+    }
+
+    window.electronAPI.getAppInfo().then(({ version, update }) => {
+      versionBtn.textContent = `v${version}`;
+      renderUpdate(update);
+    });
+    window.electronAPI.onUpdateState(renderUpdate);
   </script>
 </body>
 </html>
