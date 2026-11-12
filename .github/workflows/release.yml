@@ -23,6 +23,20 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Build a small delta update against the latest published release
+      # (see forge.config.js). Skipped if there is no previous release.
+      - name: Find previous release for delta updates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prev=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -n "$prev" ] && [ "$prev" != "$GITHUB_REF_NAME" ]; then
+            echo "Delta base: $prev"
+            echo "SQUIRREL_REMOTE_RELEASES=https://github.com/$GITHUB_REPOSITORY/releases/download/$prev" >> "$GITHUB_ENV"
+          else
+            echo "No previous release; full package only."
+          fi
       - run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

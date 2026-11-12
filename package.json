@@ -1,6 +1,6 @@
 {
   "name": "scd-moodle",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
   "author": "SCD",
   "repository": {
@@ -15,73 +15,7 @@
     "publish": "electron-forge publish"
   },
   "config": {
-    "forge": {
-      "packagerConfig": {
-        "name": "SCD Moodle",
-        "executableName": "scd-moodle",
-        "icon": "./assets/icon",
-        "asar": true,
-        "extraResource": [],
-        "ignore": [
-          "node_modules/electron$",
-          "^/\\.git",
-          "^/\\.github",
-          "^/\\.claude",
-          "^/out",
-          "^/node_modules/[^/]+/\\.yarn(/|$)",
-          "\\.yarnrc\\.yml$",
-          "^/node_modules/(.+/)?(test|tests|__tests__|\\.github)(/|$)",
-          "^/node_modules/.+\\.(md|markdown|map|ts)$",
-          "^/node_modules/.+/(karma\\.conf\\.js|jest\\.config\\.js|\\.eslintrc[^/]*|\\.jsfmtrc|\\.travis\\.yml)$"
-        ]
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin",
-            "win32"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "scd_moodle",
-            "authors": "SCD",
-            "description": "SCD Moodle – incognito browser for moodle.scd.edu.om",
-            "setupIcon": "./assets/icon.ico",
-            "iconUrl": "https://raw.githubusercontent.com/alasad311/scd-moodle/main/assets/icon.ico"
-          },
-          "platforms": [
-            "win32"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-dmg",
-          "config": {
-            "name": "SCD Moodle",
-            "format": "ULFO",
-            "icon": "./assets/icon.icns"
-          },
-          "platforms": [
-            "darwin"
-          ]
-        }
-      ],
-      "publishers": [
-        {
-          "name": "@electron-forge/publisher-github",
-          "config": {
-            "repository": {
-              "owner": "alasad311",
-              "name": "scd-moodle"
-            },
-            "draft": true,
-            "prerelease": false
-          }
-        }
-      ]
-    }
+    "forge": "./forge.config.js"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.4.0",
